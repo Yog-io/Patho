@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SkillSarthi AI: Choose a career. Decide together.</title>
+<meta name="description" content="Career guidance for students and families - choose a career, decide together.">
+<meta property="og:title" content="SkillSarthi AI: Choose a career. Decide together.">
+<meta property="og:description" content="Career guidance for students and families - choose a career, decide together.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500&family=Noto+Sans+Devanagari:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --fg:#0d0c0b;
+    --fg-soft:rgba(13,12,11,.64);
+    --fg-faint:rgba(13,12,11,.42);
+    --shade:#f2f0ec;
+    --accent:#185FA5;
+    --pill-bg:#0a0908;
+    --pill-fg:#fff;
+    --ease:cubic-bezier(.22,.61,.36,1);
+  }
+
+  *{box-sizing:border-box}
+
+  html,body{
+    margin:0;
+    padding:0;
+    background:var(--shade);
+    color:var(--fg);
+    font-family:'Inter Tight','Noto Sans Devanagari','Helvetica Neue',Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+  }
+
+  /* Scrolling does not move the page; it only scrubs the video. */
+  html{-webkit-text-size-adjust:100%}
+
+  body{
+    overflow-x:hidden;
+  }
+
+  /* ---------- Preloader ---------- */
+  .boot{
+    position:fixed;
+    inset:0;
+    z-index:100;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:18px;
+    background:var(--shade);
+    transition:opacity .6s var(--ease),visibility .6s var(--ease);
+  }
+  .boot.done{
+    opacity:0;
+    visibility:hidden;
+    pointer-events:none !important;
+  }
+  .boot__bar{
+    width:min(240px,56vw);
+    height:2px;
+    background:rgba(13,12,11,.12);
+    border-radius:2px;
+    overflow:hidden;
+  }
+  .boot__fill{
+    display:block;
+    width:0%;
+    height:100%;
+    background:var(--accent);
+    transition:width .15s linear;
+  }
+  .boot__text{
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--fg-soft);
+  }
+
+  /* ---------- Stage (fixed video background) ---------- */
+  .stage{
+    position:fixed;
+    inset:0;
+    z-index:0;
+    overflow:hidden;
+    background:var(--shade);
+    pointer-events:none;
+  }
+  #clip{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    display:block;
+    pointer-events:none;
+  }
+
+  /* Light veil: heavier at top and bottom so header/footer stay readable. */
+  .veil{
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    background:
+      linear-gradient(to bottom,
+        rgba(242,240,236,.92) 0%,
+        rgba(242,240,236,.44) 16%,
+        rgba(242,240,236,.18) 42%,
+        rgba(242,240,236,.20) 62%,
+        rgba(242,240,236,.60) 84%,
+        rgba(242,240,236,.94) 100%);
+  }
+
+  /* Subtle film grain (SVG data URI, # percent-encoded as %23). */
+  .grain{
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    opacity:.32;
+    mix-blend-mode:multiply;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+    background-size:160px 160px;
+  }
+
+  /* ---------- Scroll progress hairline ---------- */
+  .progress{
+    position:fixed;
+    top:0;
+    left:0;
+    z-index:60;
+    height:2px;
+    width:100%;
+    transform:scaleX(0);
+    transform-origin:0 50%;
+    background:var(--accent);
+    will-change:transform;
+    pointer-events:none;
+  }
+
+  /* ---------- Header ---------- */
+  .head{
+    position:fixed;
+    top:0;
+    left:0;
+    right:0;
+    z-index:50;
+    display:flex;
+    align-items:center;
+    gap:16px;
+    padding:calc(14px + env(safe-area-inset-top)) clamp(16px,4vw,40px) 14px;
+    pointer-events:none;
+  }
+  .head__logo{
+    font-size:16px;
+    font-weight:500;
+    letter-spacing:-.02em;
+    white-space:nowrap;
+    pointer-events:auto;
+  }
+  .head__nav{
+    display:flex;
+    align-items:center;
+    gap:22px;
+    margin-left:auto;
+    pointer-events:auto;
+  }
+  .head__link{
+    font-size:14px;
+    font-weight:400;
+    color:var(--fg-soft);
+    text-decoration:none;
+    letter-spacing:-.01em;
+    background:none;
+    border:0;
+    font-family:inherit;
+    cursor:pointer;
+    min-height:36px;
+    display:inline-flex;
+    align-items:center;
+  }
+  .head__link:hover{color:var(--fg)}
+  .head__lang{
+    display:flex;
+    align-items:center;
+    gap:2px;
+    font-size:13px;
+    color:var(--fg-faint);
+  }
+  .lang{
+    font-family:inherit;
+    font-size:13px;
+    background:none;
+    border:0;
+    padding:0 6px;
+    min-height:36px;
+    min-width:34px;
+    cursor:pointer;
+    color:var(--fg-soft);
+    border-radius:6px;
+  }
+  .lang:hover{color:var(--fg)}
+  .lang[aria-pressed="true"]{color:var(--fg);font-weight:500}
+  .head__sep{color:var(--fg-faint)}
+
+  .pill{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-height:38px;
+    padding:0 20px;
+    border:0;
+    border-radius:999px;
+    background:var(--pill-bg);
+    color:var(--pill-fg);
+    font-family:inherit;
+    font-size:14px;
+    font-weight:500;
+    letter-spacing:-.01em;
+    text-decoration:none;
+    white-space:nowrap;
+    cursor:pointer;
+    transition:transform .3s var(--ease),opacity .3s var(--ease);
+  }
+  .pill:hover{transform:translateY(-1px)}
+  .pill:active{transform:translateY(0)}
+  .head__cta{flex:0 0 auto}
+
+  /* ---------- Panels ---------- */
+  .panel{
+    position:fixed;
+    inset:0;
+    z-index:20;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    padding:120px clamp(20px,6vw,48px);
+    padding-top:calc(120px + env(safe-area-inset-top));
+    padding-bottom:calc(120px + env(safe-area-inset-bottom));
+    opacity:0;
+    pointer-events:none;
+    will-change:opacity,transform;
+  }
+  .panel a, .panel button{
+    pointer-events:none;
+  }
+  .panel.is-active a, .panel.is-active button{
+    pointer-events:auto;
+  }
+  .panel__eyebrow{
+    margin:0 0 18px;
+    font-size:12px;
+    font-weight:500;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:var(--accent);
+  }
+  .panel__h1{
+    margin:0;
+    font-size:clamp(30px,6vw,64px);
+    line-height:1.04;
+    font-weight:500;
+    letter-spacing:-.035em;
+    max-width:16ch;
+  }
+  .panel__sub{
+    margin:22px 0 0;
+    max-width:44ch;
+    font-size:clamp(15px,1.6vw,18px);
+    line-height:1.5;
+    font-weight:400;
+    color:var(--fg-soft);
+    letter-spacing:-.01em;
+  }
+  .panel__cta{margin-top:30px}
+
+  /* ---------- Footer ---------- */
+  .foot{
+    position:fixed;
+    left:0;
+    right:0;
+    bottom:0;
+    z-index:50;
+    padding:14px clamp(16px,4vw,40px) calc(14px + env(safe-area-inset-bottom));
+    font-size:12px;
+    color:var(--fg-faint);
+    text-align:center;
+    letter-spacing:-.005em;
+    background:linear-gradient(to top,rgba(242,240,236,.92),rgba(242,240,236,0));
+    pointer-events:none;
+  }
+  .foot__inner{
+    max-width:900px;
+    margin:0 auto;
+  }
+
+  /* Only this tall empty div gives the page its scroll length. */
+  .track{
+    height:560vh;
+    min-height:3200px;
+    width:100%;
+    pointer-events:none;
+  }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width:900px){
+    .veil{
+      background:
+        linear-gradient(to bottom,
+          rgba(242,240,236,.96) 0%,
+          rgba(242,240,236,.60) 16%,
+          rgba(242,240,236,.30) 42%,
+          rgba(242,240,236,.34) 62%,
+          rgba(242,240,236,.74) 84%,
+          rgba(242,240,236,.97) 100%);
+    }
+  }
+
+  @media (max-width:720px){
+    .head__nav{gap:12px}
+    .head__text-link{display:none}
+    .panel{padding:100px 22px;padding-top:calc(100px + env(safe-area-inset-top));padding-bottom:calc(100px + env(safe-area-inset-bottom))}
+    .panel__h1{font-size:clamp(27px,8.4vw,40px)}
+    .panel__sub{margin-top:18px;max-width:34ch}
+    .panel__eyebrow{margin-bottom:14px;font-size:11px}
+  }
+
+  @media (max-width:420px){
+    .head__logo{font-size:15px}
+    .pill{min-height:36px;padding:0 16px;font-size:13px}
+    .panel__cta{width:100%;max-width:280px}
+    .panel__cta .pill{width:100%}
+    .lang{min-width:30px;padding:0 4px}
+    .foot{font-size:11px}
+  }
+
+  @media (max-height:520px) and (orientation:landscape){
+    .panel{padding:70px 24px;padding-top:calc(70px + env(safe-area-inset-top));padding-bottom:calc(70px + env(safe-area-inset-bottom))}
+    .panel__h1{font-size:clamp(24px,4.4vw,38px)}
+    .panel__sub{margin-top:12px;font-size:15px}
+    .panel__cta{margin-top:18px}
+    .foot{display:none}
+  }
+
+  /* ---------- React app overlay (sits above landing, below preloader) ---------- */
+  #root{
+    position:fixed;
+    inset:0;
+    z-index:80;
+    pointer-events:none;
+  }
+  #root:empty{display:none}
+  #root:not(:empty){pointer-events:auto}
+  #app-overlay{
+    position:fixed;
+    inset:0;
+    z-index:80;
+    overflow-y:auto;
+    background:var(--shade);
+    pointer-events:auto;
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    .pill{transition:none}
+  }
+</style>
+</head>
+<body>
+
+<!-- 1. Preloader -->
+<div class="boot" id="boot" role="status" aria-live="polite">
+  <div class="boot__bar"><span class="boot__fill" id="bootFill"></span></div>
+  <div class="boot__text" id="bootText">LOADING 0%</div>
+</div>
+
+<!-- 2. Fixed stage: video + veil + grain -->
+<div class="stage" aria-hidden="true">
+  <video id="clip" muted playsinline preload="auto" disablepictureinpicture></video>
+  <div class="veil"></div>
+  <div class="grain"></div>
+</div>
+
+<!-- 3. Scroll progress hairline -->
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<!-- 4. Header -->
+<header class="head">
+  <div class="head__logo">SkillSarthi AI</div>
+  <nav class="head__nav">
+    <a class="head__link head__text-link" href="#careers" data-i18n="navCareers">Careers</a>
+    <a class="head__link head__text-link" href="#families" data-i18n="navFamilies">Families</a>
+    <div class="head__lang" role="group" aria-label="Language">
+      <button class="lang" type="button" data-lang="en" aria-pressed="true">EN</button>
+      <span class="head__sep">|</span>
+      <button class="lang" type="button" data-lang="hi" aria-pressed="false">हिं</button>
+      <span class="head__sep">|</span>
+      <button class="lang" type="button" data-lang="mr" aria-pressed="false">मरा</button>
+    </div>
+    <a class="pill head__cta" href="#app" data-i18n="ctaStartNow">Start now</a>
+  </nav>
+</header>
+
+<!-- 5. Three fixed panels -->
+<section class="panel" data-panel="0" aria-hidden="false">
+  <p class="panel__eyebrow" data-i18n="p1Eyebrow">Career guidance · For students and families</p>
+  <h1 class="panel__h1" data-i18n="p1Title">Choose a career.<br>Decide together.</h1>
+  <p class="panel__sub" data-i18n="p1Sub">Your interests become clear, honest options, in your own language.</p>
+  <div class="panel__cta"><a class="pill" href="#app" data-i18n="p1Cta">Start your journey</a></div>
+</section>
+
+<section class="panel" data-panel="1" aria-hidden="true">
+  <p class="panel__eyebrow" data-i18n="p2Eyebrow">For the whole family</p>
+  <h1 class="panel__h1" data-i18n="p2Title">Every voice.<br>One clear view.</h1>
+  <p class="panel__sub" data-i18n="p2Sub">Students and parents share priorities, see where they agree, and get calm questions to discuss.</p>
+  <div class="panel__cta"><a class="pill" href="#app" data-i18n="p2Cta">See Family Trust mode</a></div>
+</section>
+
+<section class="panel" data-panel="2" aria-hidden="true">
+  <p class="panel__eyebrow" data-i18n="p3Eyebrow">Honest by design</p>
+  <h1 class="panel__h1" data-i18n="p3Title">No guesses.<br>Just verified data.</h1>
+  <p class="panel__sub" data-i18n="p3Sub">Every fact shows its source. Missing data says 'Not available', never a made-up number.</p>
+  <div class="panel__cta"><a class="pill" href="#app" data-i18n="p3Cta">Get your roadmap</a></div>
+</section>
+
+<!-- 6. Footer -->
+<footer class="foot">
+  <div class="foot__inner" data-i18n="footNote">Prototype with demo data · Guidance, not a job guarantee</div>
+</footer>
+
+<!-- 7. Scroll track (the only thing that creates page length) -->
+<div class="track" aria-hidden="true"></div>
+
+<!-- 8. React app root: overlay opens when URL hash is #app -->
+<div id="root"></div>
+<script type="module" src="/src/main.tsx"></script>
+
+<script>
+(function(){
+  "use strict";
+
+  /* =========================================================
+     SkillSarthi AI — scroll-scrubbed video landing page
+     ========================================================= */
+
+  // Video path must be exactly "assets/journey.mp4"
+  var VIDEO_URL = "assets/journey.mp4";
+
+  // Cue table: [fadeInStart, fadeInEnd, fadeOutStart, fadeOutEnd] in 0..1 page progress.
+  var CUES = [
+    [0.00, 0.00, 0.15, 0.23],
+    [0.35, 0.43, 0.57, 0.65],
+    [0.77, 0.85, 1.10, 1.20]
+  ];
+
+  var DRIFT = 22;           // px of vertical drift as a panel enters/leaves
+  var EASE  = 0.115;        // scrubbing lerp factor toward the target time
+  var BLOB_FALLBACK_BYTES = 11e6; // used when content-length is unavailable
+
+  var boot      = document.getElementById("boot");
+  var bootFill  = document.getElementById("bootFill");
+  var bootText  = document.getElementById("bootText");
+  var clip      = document.getElementById("clip");
+  var progressEl= document.getElementById("progress");
+  var panels    = Array.prototype.slice.call(document.querySelectorAll(".panel"));
+
+  var progress = 0;
+  var seekTo   = 0;
+  var seekAt   = 0;
+  var duration = 0;
+  var ready    = false;
+  var seeking  = false;
+
+  /* ---------- Small helpers ---------- */
+  function clamp(v, a, b){ return v < a ? a : (v > b ? b : v); }
+
+  function smoothstep(t){
+    t = clamp(t, 0, 1);
+    return t * t * (3 - 2 * t);
+  }
+
+  // Normalised ramp across [a, b]. Degenerate range: step function.
+  function ramp(p, a, b){
+    if (b <= a) return p >= b ? 1 : 0;
+    return smoothstep((p - a) / (b - a));
+  }
+
+  /* ---------- Scroll reading ---------- */
+  function readScroll(){
+    var max = document.documentElement.scrollHeight - window.innerHeight;
+    progress = max > 0 ? clamp(window.scrollY / max, 0, 1) : 0;
+    seekTo   = progress * duration;
+  }
+
+  /* ---------- Paint (runs every frame) ---------- */
+  function setBootPct(p){
+    var pct = Math.round(clamp(p, 0, 1) * 100);
+    bootFill.style.width = pct + "%";
+    bootText.textContent = "LOADING " + pct + "%";
+  }
+
+  function paint(){
+    // Progress hairline
+    progressEl.style.transform = "scaleX(" + progress + ")";
+
+    for (var i = 0; i < panels.length; i++){
+      var c     = CUES[i] || [0, 0, 0, 1];
+      var enter = ramp(progress, c[0], c[1]);
+      var leave = ramp(progress, c[2], c[3]);
+      var op    = enter * (1 - leave);
+      var y     = (1 - enter) * DRIFT - leave * DRIFT;
+
+      var el = panels[i];
+      el.style.opacity   = op;
+      el.style.transform = "translate3d(0," + y + "px,0)";
+      
+      // Keep panel container non-blocking so scrolling is never prevented.
+      // Activate links/buttons only when panel is visible.
+      var isActive = op > 0.6;
+      el.classList.toggle("is-active", isActive);
+      el.setAttribute("aria-hidden", op > 0.05 ? "false" : "true");
+    }
+  }
+
+  /* ---------- Animation frame loop ---------- */
+  function frame(){
+    if (ready){
+      seekAt += (seekTo - seekAt) * EASE;
+      if (Math.abs(seekTo - seekAt) < 0.004) seekAt = seekTo;
+
+      // Video must stay paused and be driven only by scroll.
+      // Ensure seek updates execute and are not blocked by permanent flags.
+      if (!seeking && clip.readyState >= 2){
+        seeking = true;
+        try {
+          clip.currentTime = seekAt;
+        } catch (e) {
+          seeking = false;
+        }
+      }
+    }
+    paint();
+    requestAnimationFrame(frame);
+  }
+
+  // Handle seek completion so seeking flag resets and subsequent scroll frames update currentTime
+  clip.addEventListener("seeked", function(){
+    seeking = false;
+  });
+
+  // Ensure clip remains paused at all times
+  clip.addEventListener("play", function(){
+    try { clip.pause(); } catch(e){}
+  });
+
+  /* ---------- Media loaded handler & validation ---------- */
+  function onMediaLoaded(){
+    if (typeof clip.duration === "number" && !isNaN(clip.duration) && isFinite(clip.duration) && clip.duration > 0){
+      duration = clip.duration;
+    }
+    // Requirement 2: Log duration and readyState to browser console
+    console.log("Video duration:", clip.duration, "readyState:", clip.readyState);
+    readScroll();
+    start();
+  }
+
+  /* ---------- Attach the media source ---------- */
+  var attached = false;
+
+  function attach(src){
+    if (attached && clip.src === src) return;
+    attached = true;
+
+    // Bind listeners before setting src so no event is missed
+    clip.addEventListener("loadedmetadata", onMediaLoaded);
+    clip.addEventListener("loadeddata", onMediaLoaded);
+    clip.addEventListener("canplay", onMediaLoaded);
+    clip.addEventListener("canplaythrough", onMediaLoaded);
+    clip.addEventListener("error", function(err){
+      console.warn("Video element error event:", err);
+      // Still release the preloader so copy is accessible
+      start();
+    });
+
+    // Safeguard: A stalled decode must never trap the page behind preloader
+    setTimeout(start, 6000);
+
+    clip.src = src;
+    try {
+      clip.pause();
+      clip.load();
+    } catch (e) {}
+  }
+
+  /* ---------- Preload ----------
+     Fetch the mp4 as a fully buffered Blob. Seeking inside a blob is
+     instantaneous; seeking over the network relies on HTTP range requests.
+     If fetch fails or is rejected, immediate fallback attaches the plain URL. */
+  function preload(){
+    var url = VIDEO_URL;
+    var done = false;
+    var bail;
+
+    function fallback(){
+      if (done) return;
+      done = true;
+      clearTimeout(bail);
+      console.log("Using direct video URL fallback:", url);
+      attach(url);
+    }
+
+    // Bail timer for slower connections
+    bail = setTimeout(function(){
+      if (!done && !clip.src) fallback();
+    }, 6000);
+
+    if (typeof fetch !== "function" || typeof Blob === "undefined"){
+      fallback();
+      return;
+    }
+
+    fetch(url)
+      .then(function(res){
+        if (!res.ok) throw new Error("HTTP " + res.status);
+
+        var total = parseInt(res.headers.get("content-length") || "", 10);
+        if (!total || isNaN(total)) total = BLOB_FALLBACK_BYTES;
+
+        if (!res.body || typeof res.body.getReader !== "function"){
+          return res.blob();
+        }
+
+        var reader = res.body.getReader();
+        var chunks = [];
+        var received = 0;
+
+        return (function pump(){
+          return reader.read().then(function(r){
+            if (r.done) return new Blob(chunks, { type: "video/mp4" });
+            chunks.push(r.value);
+            received += r.value.length;
+            setBootPct(received / total);
+            return pump();
+          });
+        })();
+      })
+      .then(function(blob){
+        if (done) return;
+        done = true;
+        clearTimeout(bail);
+        setBootPct(1);
+        attach(URL.createObjectURL(blob));
+      })
+      .catch(function(err){
+        console.warn("Fetch-as-blob failed, falling back immediately:", err);
+        fallback();
+      });
+  }
+
+  /* ---------- Start (idempotent) ---------- */
+  var started = false;
+
+  function start(){
+    if (started) return;
+    started = true;
+    ready = true;
+    setBootPct(1);
+    boot.classList.add("done");
+    if (typeof clip.duration === "number" && !isNaN(clip.duration) && isFinite(clip.duration) && clip.duration > 0){
+      duration = clip.duration;
+    }
+    console.log("Video duration:", clip.duration, "readyState:", clip.readyState);
+    readScroll();
+    seekAt = seekTo; // Avoid initial whip from 0
+    try { clip.pause(); } catch(e){}
+  }
+
+  /* ---------- iOS unlock ---------- */
+  var unlocked = false;
+
+  function unlock(){
+    if (unlocked) return;
+    unlocked = true;
+    var p = clip.play();
+    if (p && typeof p.then === "function"){
+      p.then(function(){ try { clip.pause(); } catch (e) {} })
+       .catch(function(){ try { clip.pause(); } catch(e){} });
+    } else {
+      try { clip.pause(); } catch (e) {}
+    }
+  }
+
+  ["touchstart", "pointerdown", "wheel", "keydown"].forEach(function(evt){
+    window.addEventListener(evt, unlock, { once: true, passive: true });
+  });
+
+  /* ---------- Language switcher ---------- */
+  var I18N = {
+    en: {
+      navCareers : "Careers",
+      navFamilies: "Families",
+      ctaStartNow: "Start now",
+      p1Eyebrow  : "Career guidance · For students and families",
+      p1Title    : "Choose a career.<br>Decide together.",
+      p1Sub      : "Your interests become clear, honest options, in your own language.",
+      p1Cta      : "Start your journey",
+      p2Eyebrow  : "For the whole family",
+      p2Title    : "Every voice.<br>One clear view.",
+      p2Sub      : "Students and parents share priorities, see where they agree, and get calm questions to discuss.",
+      p2Cta      : "See Family Trust mode",
+      p3Eyebrow  : "Honest by design",
+      p3Title    : "No guesses.<br>Just verified data.",
+      p3Sub      : "Every fact shows its source. Missing data says 'Not available', never a made-up number.",
+      p3Cta      : "Get your roadmap",
+      footNote   : "Prototype with demo data · Guidance, not a job guarantee"
+    },
+    hi: {
+      navCareers : "करियर",
+      navFamilies: "परिवार",
+      ctaStartNow: "अभी शुरू करें",
+      p1Eyebrow  : "करियर मार्गदर्शन · विद्यार्थियों और परिवारों के लिए",
+      p1Title    : "करियर चुनें।<br>साथ मिलकर तय करें।",
+      p1Sub      : "आपकी रुचियाँ स्पष्ट और ईमानदार विकल्पों में बदलती हैं, आपकी अपनी भाषा में।",
+      p1Cta      : "अपनी यात्रा शुरू करें",
+      p2Eyebrow  : "पूरे परिवार के लिए",
+      p2Title    : "हर आवाज़।<br>एक स्पष्ट दृष्टि।",
+      p2Sub      : "विद्यार्थी और माता-पिता अपनी प्राथमिकताएँ साझा करते हैं, सहमति देखते हैं, और चर्चा के लिए शांत प्रश्न पाते हैं।",
+      p2Cta      : "फैमिली ट्रस्ट मोड देखें",
+      p3Eyebrow  : "डिज़ाइन से ईमानदार",
+      p3Title    : "कोई अनुमान नहीं।<br>केवल सत्यापित डेटा।",
+      p3Sub      : "हर तथ्य अपना स्रोत दिखाता है। जानकारी न हो तो 'उपलब्ध नहीं' लिखा जाता है, कोई बनाया हुआ आँकड़ा नहीं।",
+      p3Cta      : "अपना रोडमैप पाएँ",
+      footNote   : "डेमो डेटा के साथ प्रोटोटाइप · मार्गदर्शन, नौकरी की गारंटी नहीं"
+    },
+    mr: {
+      navCareers : "करिअर",
+      navFamilies: "कुटुंब",
+      ctaStartNow: "आता सुरू करा",
+      p1Eyebrow  : "करिअर मार्गदर्शन · विद्यार्थी आणि कुटुंबांसाठी",
+      p1Title    : "करिअर निवडा.<br>एकत्र ठरवा.",
+      p1Sub      : "तुमच्या आवडी स्पष्ट, प्रामाणिक पर्यायांमध्ये बदलतात, तुमच्या स्वतःच्या भाषेत.",
+      p1Cta      : "तुमचा प्रवास सुरू करा",
+      p2Eyebrow  : "संपूर्ण कुटुंबासाठी",
+      p2Title    : "प्रत्येक आवाज.<br>एक स्पष्ट दृष्टी.",
+      p2Sub      : "विद्यार्थी आणि पालक त्यांच्या प्राधान्यक्रम सांगतात, सहमती पाहतात, आणि चर्चेसाठी शांत प्रश्न मिळवतात.",
+      p2Cta      : "फॅमिली ट्रस्ट मोड पाहा",
+      p3Eyebrow  : "रचनेने प्रामाणिक",
+      p3Title    : "कोणतेही अंदाज नाही.<br>फक्त सत्यापित डेटा.",
+      p3Sub      : "प्रत्येक तथ्य त्याचा स्रोत दाखवते. माहिती नसेल तर 'उपलब्ध नाही' असे लिहिले जाते, बनावट आकडा कधीही नाही.",
+      p3Cta      : "तुमचा रोडमॅप मिळवा",
+      footNote   : "डेमो डेटासह प्रोटोटाइप · मार्गदर्शन, नोकरीची हमी नाही"
+    }
+  };
+
+  function setLang(code){
+    var dict = I18N[code];
+    if (!dict) return;
+
+    var nodes = document.querySelectorAll("[data-i18n]");
+    for (var i = 0; i < nodes.length; i++){
+      var key = nodes[i].getAttribute("data-i18n");
+      if (dict[key] != null) nodes[i].innerHTML = dict[key];
+    }
+
+    var btns = document.querySelectorAll(".lang");
+    for (var j = 0; j < btns.length; j++){
+      btns[j].setAttribute("aria-pressed", btns[j].getAttribute("data-lang") === code ? "true" : "false");
+    }
+
+    document.documentElement.lang = code;
+  }
+
+  var langBtns = document.querySelectorAll(".lang");
+  for (var b = 0; b < langBtns.length; b++){
+    langBtns[b].addEventListener("click", function(){
+      setLang(this.getAttribute("data-lang"));
+    });
+  }
+
+  /* ---------- Bind scroll + resize + boot ---------- */
+  window.addEventListener("scroll", readScroll, { passive: true });
+  window.addEventListener("resize", readScroll);
+  window.addEventListener("orientationchange", readScroll);
+
+  readScroll();
+  requestAnimationFrame(frame);
+  preload();
+})();
+</script>
+
+</body>
+</html>

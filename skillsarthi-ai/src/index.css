@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+#app-overlay {
+  font-family: 'Inter Tight', 'Noto Sans Devanagari', 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app-overlay ::selection {
+  background: #185FA5;
+  color: #fff;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #accord-print,
+  #accord-print * {
+    visibility: visible;
+  }
+  #accord-print {
+    position: absolute;
+    inset: 0;
+    border: none !important;
+  }
+}

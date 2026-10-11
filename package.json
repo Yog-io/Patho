@@ -1,0 +1,21 @@
+{
+  "name": "patho-msde-platform",
+  "version": "1.0.0",
+  "description": "AI-Enabled Career Counselling & Family Decision-Support Platform (MSDE Problem Statement 26241)",
+  "type": "module",
+  "scripts": {
+    "dev": "node dev.js",
+    "start": "npm start --prefix server",
+    "server": "npm start --prefix server"
+  },
+  "keywords": [
+    "msde",
+    "nsqf",
+    "career-counselling",
+    "family-mediation",
+    "ai-mediation",
+    "smart-education"
+  ],
+  "author": "MSDE Innovation Team",
+  "license": "MIT"
+}

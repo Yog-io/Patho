@@ -1,0 +1,6 @@
+{
+  "name": "SkillSarthi AI",
+  "description": "Career guidance for students and families - choose a career, decide together.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

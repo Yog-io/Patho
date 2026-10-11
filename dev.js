@@ -14,7 +14,7 @@ const server = spawn('npm', ['start'], {
 });
 
 const frontend = spawn('npm', ['run', 'dev'], {
-  cwd: path.join(__dirname, 'skillsarthi-ai'),
+  cwd: path.join(__dirname, 'Pathora-ai'),
   stdio: 'inherit',
   shell: true,
   env: { ...process.env, DISABLE_HMR: process.env.DISABLE_HMR ?? 'false' }

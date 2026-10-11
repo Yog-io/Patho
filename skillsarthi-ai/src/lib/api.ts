@@ -1,4 +1,4 @@
-/** SkillSarthi AI — typed client for the Patho MSDE backend (Express :5001). */
+/** Pathora AI — typed client for the Patho MSDE backend (Express :5001). */
 
 export const API_BASE: string =
   (import.meta as unknown as { env?: Record<string, string> }).env

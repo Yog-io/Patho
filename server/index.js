@@ -7,6 +7,7 @@ import { db, initializeDatabase } from './database.js';
 import { 
   generateDynamicIntakeTurn,
   generateDynamicMediationTurn,
+  synthesizeIntakeSummary,
   fixedFirstQuestion,
   isAiEnabled,
   getAiConfig
@@ -254,19 +255,16 @@ app.post('/api/chat/student-intake', async (req, res) => {
     traitVector: row.extracted_traits_json ? JSON.parse(row.extracted_traits_json) : undefined,
     isIntakeComplete: false
   });
-  const completeTurn = () => {
-    const s = db.prepare('SELECT intake_summary FROM sessions WHERE id = ?').get(sessionId);
-    return {
-      sessionId,
-      stepNumber: 4,
-      counselorMessage: s?.intake_summary || 'Assessment complete.',
-      questionId: 'q_complete',
-      questionType: 'text',
-      options: [],
-      isIntakeComplete: true,
-      summaryMessage: s?.intake_summary || undefined
-    };
-  };
+  const completeTurn = (summary) => ({
+    sessionId,
+    stepNumber: 4,
+    counselorMessage: summary || 'Assessment complete.',
+    questionId: 'q_complete',
+    questionType: 'text',
+    options: [],
+    isIntakeComplete: true,
+    summaryMessage: summary || undefined
+  });
 
   // 1. Log the answer against its pending question
   if (userResponse) {
@@ -282,7 +280,17 @@ app.post('/api/chat/student-intake', async (req, res) => {
 
   // 2. Four answered questions completes the assessment
   if (answeredCount() >= 4) {
-    return res.json(completeTurn());
+    let summary = db.prepare('SELECT intake_summary FROM sessions WHERE id = ?').get(sessionId)?.intake_summary;
+    if (!summary) {
+      const history = db.prepare(
+        `SELECT question_text as question, user_response as answer FROM qa_interactions WHERE session_id = ? AND status = 'answered' ORDER BY step_number ASC`
+      ).all(sessionId);
+      summary = await synthesizeIntakeSummary({ studentName, history, lang: l });
+      if (summary) {
+        db.prepare(`UPDATE sessions SET intake_summary = ? WHERE id = ?`).run(summary, sessionId);
+      }
+    }
+    return res.json(completeTurn(summary));
   }
 
   // 3. Re-serve a pending question (cache — no AI call)
@@ -315,9 +323,6 @@ app.post('/api/chat/student-intake', async (req, res) => {
         message: 'The counsellor could not compose the next question. Check the API key/quota and retry.'
       });
     }
-    if (turn.summary_message && turn.is_intake_complete) {
-      db.prepare(`UPDATE sessions SET intake_summary = ? WHERE id = ?`).run(turn.summary_message, sessionId);
-    }
   }
 
   db.prepare(`
@@ -343,8 +348,8 @@ app.post('/api/chat/student-intake', async (req, res) => {
     questionType: turn.question_type,
     options: turn.options,
     traitVector: turn.trait_vector,
-    isIntakeComplete: turn.is_intake_complete,
-    summaryMessage: turn.summary_message
+    isIntakeComplete: false,
+    summaryMessage: undefined
   });
 });
 
@@ -507,13 +512,39 @@ app.post('/api/mediation/turn', async (req, res) => {
   const prior = db.prepare(
     'SELECT objection_type FROM mediation_sessions WHERE session_id = ? ORDER BY turn_number ASC'
   ).all(sessionId).map(r => r.objection_type).filter(Boolean);
+
+  let stigmaConcerns = [];
+  try {
+    const parsed = JSON.parse(parentProfile?.stigma_concerns_json || '[]');
+    stigmaConcerns = Array.isArray(parsed) ? parsed : [parentProfile?.stigma_concerns_json].filter(Boolean);
+  } catch {
+    stigmaConcerns = parentProfile?.stigma_concerns_json ? [parentProfile.stigma_concerns_json] : [];
+  }
+
+  let safetyConcerns = [];
+  try {
+    const parsed = JSON.parse(parentProfile?.safety_concerns_json || '[]');
+    safetyConcerns = Array.isArray(parsed) ? parsed : [parentProfile?.safety_concerns_json].filter(Boolean);
+  } catch {
+    safetyConcerns = parentProfile?.safety_concerns_json ? [parentProfile.safety_concerns_json] : [];
+  }
+
+  const rawVoiceTranscript = parentProfile?.raw_voice_transcript || '';
+  const studentAptitudeSummary = session?.intake_summary || '';
+  const salaryDeficit = Math.max(0, Number(parentProfile?.min_salary_monthly || 0) - Number(selectedRole.firstYearSalary || 0));
+
   const mediationResponse = await generateDynamicMediationTurn({
     studentName: session?.student_name || 'Rahul',
     lockedRole: selectedRole,
     parentProfile,
     turnNumber,
     parentDoubts,
-    priorStages: prior
+    priorStages: prior,
+    stigmaConcerns,
+    safetyConcerns,
+    rawVoiceTranscript,
+    studentAptitudeSummary,
+    salaryDeficit
   });
   if (!mediationResponse) {
     return res.status(502).json({
@@ -522,7 +553,8 @@ app.post('/api/mediation/turn', async (req, res) => {
     });
   }
 
-  // Record mediation turn into DB (full snapshot for refresh-safe resume)
+  // Idempotently record mediation turn into DB (prevents duplicate turn rows)
+  db.prepare('DELETE FROM mediation_sessions WHERE session_id = ? AND turn_number = ?').run(sessionId, turnNumber);
   db.prepare(`
     INSERT INTO mediation_sessions (session_id, turn_number, speaker, message, objection_type, policy_proof_cited, turn_json)
     VALUES (?, ?, ?, ?, ?, ?, ?)

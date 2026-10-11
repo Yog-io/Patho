@@ -136,6 +136,18 @@ export function initializeDatabase() {
     }
   }
 
+  // Ensure mediation_sessions has no duplicates and has a unique index
+  try {
+    db.exec(`
+      DELETE FROM mediation_sessions WHERE id NOT IN (
+        SELECT MAX(id) FROM mediation_sessions GROUP BY session_id, turn_number
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_mediation_session_turn ON mediation_sessions(session_id, turn_number);
+    `);
+  } catch (err) {
+    console.warn('Could not create unique index on mediation_sessions:', err.message);
+  }
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS session_matches (
       session_id TEXT PRIMARY KEY,

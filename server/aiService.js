@@ -49,28 +49,27 @@ You synthesize the locked role, local accredited ITIs/PMKKs, NAPS stipend guaran
  * Nothing here ever returns the raw key to callers.
  */
 export function getAiConfig() {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.AI_API_KEY || '';
+  const apiKey = process.env.GROQ_API_KEY || process.env.AI_API_KEY || process.env.GEMINI_API_KEY || '';
   return {
-    apiBaseUrl: process.env.AI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai',
-    modelName: process.env.AI_MODEL || 'gemini-2.0-flash',
+    apiBaseUrl: process.env.AI_BASE_URL || 'https://api.groq.com/openai/v1',
+    modelName: process.env.AI_MODEL || 'openai/gpt-oss-120b',
     useCustomApi: isAiEnabled(),
     hasApiKey: apiKey.trim().length > 0
   };
 }
 
 export function isAiEnabled() {
-  const key = process.env.GEMINI_API_KEY || process.env.AI_API_KEY || '';
+  const key = process.env.GROQ_API_KEY || process.env.AI_API_KEY || process.env.GEMINI_API_KEY || '';
   const flag = String(process.env.AI_ENABLED ?? 'true').toLowerCase();
   return key.trim().length > 0 && flag !== 'false' && flag !== '0' && flag !== 'no';
 }
 
 /**
  * Universal OpenAI-Compatible API Client
- * Supports Gemini (via its OpenAI-compatible endpoint), OpenAI, Groq,
- * Ollama, Together AI, OpenRouter, vLLM.
+ * Supports Groq, OpenAI, Ollama, Together AI, OpenRouter, vLLM, Gemini.
  */
 export async function callOpenAICompatibleApi({ systemPrompt, messages, temperature = 0.7, timeoutMs = 25000 }) {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.AI_API_KEY || '';
+  const apiKey = process.env.GROQ_API_KEY || process.env.AI_API_KEY || process.env.GEMINI_API_KEY || '';
 
   if (isAiEnabled() && apiKey.trim() !== '') {
     const { apiBaseUrl, modelName } = getAiConfig();
@@ -78,6 +77,17 @@ export async function callOpenAICompatibleApi({ systemPrompt, messages, temperat
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const fullUrl = `${apiBaseUrl.replace(/\/+$/, '')}/chat/completions`;
+      const payload = {
+        model: modelName,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...messages
+        ],
+        temperature
+      };
+      if (!apiBaseUrl.includes('groq.com') && !modelName.includes('oss')) {
+        payload.response_format = { type: 'json_object' };
+      }
       const response = await fetch(fullUrl, {
         method: 'POST',
         signal: controller.signal,
@@ -85,15 +95,7 @@ export async function callOpenAICompatibleApi({ systemPrompt, messages, temperat
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`
         },
-        body: JSON.stringify({
-          model: modelName,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...messages
-          ],
-          temperature,
-          response_format: { type: 'json_object' }
-        })
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
@@ -196,8 +198,7 @@ const INTAKE_SCHEMA_HINT = `Return ONLY a JSON object with exactly these keys:
   "question_type": "one of mcq | scenario | text",
   "options": ["4 concrete answer options" ],
   "trait_vector": { "mechanical": 0-100, "electrical": 0-100, "spatial": 0-100, "computational": 0-100, "mobility": 0-100 },
-  "is_intake_complete": false (true ONLY on the 4th and final question),
-  "summary_message": "present only when is_intake_complete is true: 1-line aptitude synthesis"
+  "is_intake_complete": false
 }`;
 
 function validIntakeTurn(t) {
@@ -212,6 +213,7 @@ function validIntakeTurn(t) {
 /**
  * Dynamic student-intake turn. History = prior [{question, answer}] pairs.
  * Diagnoses ONE dimension per turn across a 4-question arc.
+ * Every generated question MUST be answered by the student; is_intake_complete is always false here.
  */
 export async function generateDynamicIntakeTurn({ stepNumber, userResponse, studentName, history = [], lang = 'en', lifeGoal = '' }) {
   const l = ['hi', 'mr'].includes(lang) ? lang : 'en';
@@ -223,7 +225,7 @@ export async function generateDynamicIntakeTurn({ stepNumber, userResponse, stud
     temperature: 0.8,
     messages: [{
       role: 'user',
-      content: `Student: ${studentName}. Write in ${INTAKE_LANG[l]}. We are on question ${Math.min(stepNumber, 4)} of a 4-question arc. Question 1 (fixed life-goal opener) was answered: "${lifeGoal || 'unknown'}". Every follow-up must be tailored to that life-goal anchor.\nConversation so far:\n${histText}\nLatest answer: ${userResponse || '(none yet)'}\n${INTAKE_SCHEMA_HINT}`
+      content: `Student: ${studentName}. Write in ${INTAKE_LANG[l]}. We are generating question ${Math.min(stepNumber, 4)} of a 4-question arc. The student MUST be given this question to answer. Question 1 (fixed life-goal opener) was answered: "${lifeGoal || 'unknown'}". Every follow-up must be tailored to that life-goal anchor.\nConversation so far:\n${histText}\nLatest answer: ${userResponse || '(none yet)'}\n${INTAKE_SCHEMA_HINT}`
     }]
   });
   if (!validIntakeTurn(ai)) return null;
@@ -233,35 +235,99 @@ export async function generateDynamicIntakeTurn({ stepNumber, userResponse, stud
     question_type: ai.question_type,
     options: ai.options.map(String).slice(0, 6),
     trait_vector: ai.trait_vector && typeof ai.trait_vector === 'object' ? ai.trait_vector : undefined,
-    is_intake_complete: ai.is_intake_complete === true && stepNumber >= 4,
-    summary_message: typeof ai.summary_message === 'string' ? ai.summary_message : undefined
+    is_intake_complete: false,
+    summary_message: undefined
   };
+}
+
+/**
+ * Synthesizes all 4 completed Q&A pairs into an authentic 1-2 line vocational profile summary.
+ * Called ONLY after all 4 answers have been submitted.
+ */
+export async function synthesizeIntakeSummary({ studentName, history = [], lang = 'en' }) {
+  const l = ['hi', 'mr'].includes(lang) ? lang : 'en';
+  const histText = history.map((h, i) => `Q${i + 1}: ${h.question}\nA${i + 1}: ${h.answer}`).join('\n');
+  const ai = await callOpenAICompatibleApi({
+    systemPrompt: SYSTEM_PROMPTS.STUDENT_INTAKE,
+    temperature: 0.5,
+    messages: [{
+      role: 'user',
+      content: `Student: ${studentName}. The learner has completed all 4 questions of their vocational aptitude assessment in ${INTAKE_LANG[l]}.
+Assessment responses:
+${histText}
+
+Synthesize an authentic, encouraging 1-2 line vocational aptitude summary in ${INTAKE_LANG[l]} capturing their key hands-on inclinations, strengths, and life goals.
+Return ONLY JSON: { "summary": "1-2 line synthesis" }`
+    }]
+  });
+  if (ai && typeof ai.summary === 'string' && ai.summary.trim()) {
+    return ai.summary.trim();
+  }
+  return `${studentName} exhibits a practical, hands-on inclination with a strong orientation toward applied technical skills and structured vocational growth.`;
 }
 
 /**
  * AI mediation turn — 4-stage arc
  * (VALIDATION → THE_REVEAL → OBJECTION_HANDLING → CONSENSUS_BRIDGE),
  * drafted fresh each call from the locked AI-researched role and the
- * family's stated constraints. Returns null when unusable.
+ * family's stated constraints (including prestige stigma, safety doubts, and verbatim voice transcripts).
+ * Returns null when unusable.
  */
-export async function generateDynamicMediationTurn({ studentName, lockedRole, parentProfile, turnNumber, parentDoubts, priorStages = [] }) {
+export async function generateDynamicMediationTurn({
+  studentName,
+  lockedRole,
+  parentProfile,
+  turnNumber,
+  parentDoubts,
+  priorStages = [],
+  stigmaConcerns = [],
+  safetyConcerns = [],
+  rawVoiceTranscript = '',
+  studentAptitudeSummary = '',
+  salaryDeficit = 0
+}) {
   const role = lockedRole || {};
   const hiring = Array.isArray(role.hiringPartners) ? role.hiringPartners.join(', ') : '';
   const stage = turnNumber === 1 ? 'VALIDATION' : turnNumber === 2 ? 'THE_REVEAL' : turnNumber === 3 ? 'OBJECTION_HANDLING' : 'CONSENSUS_BRIDGE';
+
+  const minSalary = Number(parentProfile?.min_salary_monthly || 18000);
+  const yr1Salary = Number(role.firstYearSalary || 0);
+  const gapDirective = salaryDeficit > 0
+    ? `Financial Gap: Parent expects ≥₹${minSalary.toLocaleString('en-IN')}/mo, Role Year-1 base is ₹${yr1Salary.toLocaleString('en-IN')}/mo (Net Deficit: -₹${salaryDeficit.toLocaleString('en-IN')}/mo). Explicitly address how certified micro-credentials / NAPS progression close this ₹${salaryDeficit.toLocaleString('en-IN')} gap.`
+    : `Financial Alignment: Role Year-1 base ₹${yr1Salary.toLocaleString('en-IN')}/mo meets or exceeds parent minimum requirement of ₹${minSalary.toLocaleString('en-IN')}/mo. Highlight immediate economic security.`;
+
   const boosterHint = turnNumber === 3
-    ? ` Also propose ONE concrete micro-credential wage booster (real course type + duration + monthly wage uplift figure) as "boosterOffered": { "title", "wageBoost": "+ ₹X / month", "projectedYear1Wage": "₹A - ₹B / month", "explanation" }.`
+    ? ` Also propose ONE concrete micro-credential wage booster (real course type + duration + monthly wage uplift figure) as "boosterOffered": { "title", "wageBoost": "+ ₹X / month", "projectedYear1Wage": "₹A - ₹B / month", "explanation" }. Ensure the booster closes the financial gap.`
     : '';
+
+  const parentLang = parentProfile?.language === 'hi-IN' ? 'Hindi (Devanagari)' : parentProfile?.language === 'en-IN' ? 'simple English' : 'Marathi (Devanagari)';
+
   const ai = await callOpenAICompatibleApi({
     systemPrompt: SYSTEM_PROMPTS.TRIPARTITE_MEDIATION,
     temperature: 0.7,
     messages: [{
       role: 'user',
       content: `Write mediation proceeding #${turnNumber} (stage: ${stage}).
-Student: ${studentName}. Locked role: ${role.title || 'the chosen vocational role'} (NSQF ${role.nsqfLevel || '?'}, entry stipend ₹${Number(role.entryStipend || 0).toLocaleString('en-IN')}/mo, Year-1 ₹${Number(role.firstYearSalary || 0).toLocaleString('en-IN')}/mo, 5-yr ₹${Number(role.fiveYearSalary || 0).toLocaleString('en-IN')}/mo, ${role.workEnvironment || ''}; hiring: ${hiring}; degree bridge: ${role.ncrfCreditBridge || ''}).
-Parent: ${parentProfile?.parent_name || 'Parent'} (${parentProfile?.relation || 'Father'}), language ${parentProfile?.language || 'mr-IN'}, needs ≥₹${Number(parentProfile?.min_salary_monthly || 18000).toLocaleString('en-IN')}/mo, commute ≤${parentProfile?.max_commute_km || 35} km.
+Student: ${studentName}.
+Student Authentic Aptitude & Alignment: ${studentAptitudeSummary || 'Strong hands-on technical and vocational problem-solving aptitude'}.
+Locked Role: ${role.title || 'the chosen vocational role'} (NSQF ${role.nsqfLevel || '?'}, entry stipend ₹${Number(role.entryStipend || 0).toLocaleString('en-IN')}/mo, Year-1 ₹${yr1Salary.toLocaleString('en-IN')}/mo, 5-yr ₹${Number(role.fiveYearSalary || 0).toLocaleString('en-IN')}/mo, ${role.workEnvironment || ''}; hiring: ${hiring}; degree bridge: ${role.ncrfCreditBridge || ''}).
+
+Parent: ${parentProfile?.parent_name || 'Parent'} (${parentProfile?.relation || 'Father'}), preferred language: ${parentProfile?.language || 'mr-IN'}.
+Commute Limit: ≤${parentProfile?.max_commute_km || 35} km.
+Parent Stigma / Prestige Doubts: ${stigmaConcerns.length ? stigmaConcerns.join('; ') : 'Fear of roadside garage stigma and lack of social prestige'}.
+Parent Workplace Safety Doubts: ${safetyConcerns.length ? safetyConcerns.join('; ') : 'Concern over dangerous factory shop-floor conditions and physical hazards'}.
+Parent Raw Voice/Verbatim Note: "${rawVoiceTranscript || 'None recorded'}".
+${gapDirective}
+
 Prior stages covered: ${priorStages.join(', ') || 'none'}.
 Latest parent doubt to answer: ${parentDoubts || '(none — advance the stage arc)'}.${boosterHint}
-Return ONLY JSON: { "title": "short proceeding title", "message": "the mediator's address (respectful, evidence-led, 120-200 words)", "vernacularSummary": "2-line summary in ${parentProfile?.language === 'hi-IN' ? 'Hindi (Devanagari)' : parentProfile?.language === 'en-IN' ? 'simple English' : 'Marathi (Devanagari)'}"${turnNumber === 3 ? ', "boosterOffered": { "title": "…", "wageBoost": "+ ₹X / month", "projectedYear1Wage": "₹A - ₹B / month", "explanation": "…" }' : ''} }`
+
+CRITICAL MEDIATION INSTRUCTIONS:
+- Directly address the parent's authentic prestige doubts, safety anxieties, and voice note verbatim.
+- Connect the student's authentic aptitude to this locked role so the parent understands this is their child's natural strength, not an inferior choice.
+- Ground all arguments in government certifications (NCVET, NSQF), clean corporate shop-floors, and degree progression (NCrF B.Voc).
+
+Return ONLY JSON: { "title": "short proceeding title", "message": "the mediator's address (respectful, evidence-led, culturally empathetic, 120-200 words)", "vernacularSummary": "2-3 line empathetic summary in ${parentLang} addressing their exact concerns"${turnNumber === 3 ? ', "boosterOffered": { "title": "…", "wageBoost": "+ ₹X / month", "projectedYear1Wage": "₹A - ₹B / month", "explanation": "…" }' : ''} }`
     }]
   });
   if (!ai || typeof ai.message !== 'string' || !ai.message.trim()) return null;

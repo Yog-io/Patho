@@ -1,5 +1,5 @@
 /**
- * SkillSarthi AI — functional app overlay.
+ * Pathora AI — functional app overlay.
  * Editorial workspace layout (rail + fluid main) in the landing's
  * visual language. The intake is a counselling assessment sheet —
  * numbered ledger, examiner-style option rows — not a messenger.
@@ -21,7 +21,7 @@ type Phase = 'history' | 'profile' | 'intake' | 'careers' | 'parent' | 'mediatio
 
 const STR: Record<Lang, Record<string, string>> = {
   en: {
-    appTitle: 'SkillSarthi AI',
+    appTitle: 'Pathora AI',
     appSub: 'Choose a career. Decide together.',
     close: 'Back to stories',
     demo: 'Load Rahul (Pune) demo',
@@ -373,8 +373,21 @@ export default function App() {
     currentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [turn?.questionId]);
 
+  const restoredRef = useRef(false);
+
   useEffect(() => {
-    if (open) refreshConsults();
+    if (!open) return;
+    refreshConsults();
+    if (!restoredRef.current) {
+      restoredRef.current = true;
+      const savedId = localStorage.getItem('ss_session');
+      if (savedId) {
+        openConsultation(savedId).catch((err) => {
+          console.warn('Could not restore session:', err);
+          localStorage.removeItem('ss_session');
+        });
+      }
+    }
   }, [open]);
 
   useEffect(() => {
@@ -717,8 +730,8 @@ export default function App() {
 
   const waLink = accord
     ? `https://wa.me/?text=${encodeURIComponent(
-        `SkillSarthi Family Accord ${accord.accordCode} — ${accord.accord.studentName} + ${accord.accord.parentName} agree on ${accord.accord.careerTitle} (NSQF ${accord.accord.nsqfLevel}) at ${accord.accord.instituteSelected}. NAPS stipend ${inr(accord.accord.napsStipendCommitted)}/mo, Year-1 target ${inr(accord.accord.targetYr1Salary)}/mo.`,
-      )}`
+      `Pathora Family Accord ${accord.accordCode} — ${accord.accord.studentName} + ${accord.accord.parentName} agree on ${accord.accord.careerTitle} (NSQF ${accord.accord.nsqfLevel}) at ${accord.accord.instituteSelected}. NAPS stipend ${inr(accord.accord.napsStipendCommitted)}/mo, Year-1 target ${inr(accord.accord.targetYr1Salary)}/mo.`,
+    )}`
     : '#';
 
   const traits = turn?.traitVector ? Object.entries(turn.traitVector).slice(0, 5) : [];
@@ -785,9 +798,8 @@ export default function App() {
                         <span className={`absolute left-[13px] top-7 h-[calc(100%-1.5rem)] w-px ${done ? 'bg-black' : 'bg-black/15'}`} aria-hidden />
                       )}
                       <span
-                        className={`z-10 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${
-                          now ? 'bg-[#185FA5] text-white' : done ? 'bg-black text-white' : 'border border-black/20 text-black/50'
-                        }`}
+                        className={`z-10 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${now ? 'bg-[#185FA5] text-white' : done ? 'bg-black text-white' : 'border border-black/20 text-black/50'
+                          }`}
                       >
                         {done ? '✓' : i + 1}
                       </span>
@@ -881,9 +893,9 @@ export default function App() {
                     const pct = c.hasAccord ? 100 : c.mediationTurns ? Math.min(95, 55 + c.mediationTurns * 8) : c.hasParent ? 55 : c.hasLock ? 40 : Math.round((c.answered / 4) * 30);
                     const status = c.resumePhase === 'accord' ? `✒️ Accord ${c.accordCode}`
                       : c.resumePhase === 'mediation' ? (c.mediationTurns ? `Mediation ${c.mediationTurns}/4` : 'Family baseline saved')
-                      : c.resumePhase === 'parent' ? `🔒 ${c.lockedTitle}`
-                      : c.resumePhase === 'careers' ? 'Roles researched'
-                      : `Assessment ${c.answered}/4`;
+                        : c.resumePhase === 'parent' ? `🔒 ${c.lockedTitle}`
+                          : c.resumePhase === 'careers' ? 'Roles researched'
+                            : `Assessment ${c.answered}/4`;
                     return (
                       <article key={c.sessionId} className={`flex flex-wrap items-center gap-3 rounded-2xl border bg-white p-4 sm:px-5 ${c.sessionId === sessionId ? 'border-[#185FA5] ring-1 ring-[#185FA5]/30' : 'border-black/10'}`}>
                         <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#0a0908] text-[13px] font-semibold text-white" aria-hidden>
@@ -1015,14 +1027,14 @@ export default function App() {
                     {turn?.summaryMessage && <p className="max-w-3xl text-[15px] leading-relaxed">✓ {turn.summaryMessage}</p>}
                     <button
                       onClick={async () => {
-                      if (!roles.length) {
-                        setBusy(true);
-                        try {
-                          const rec = await api.matchRoles(sessionId);
-                          setRoles(rec.roles);
-                          setRolesPersonalized(!!rec.personalized);
-                          setRolesGrounded(!!rec.grounded);
-                        } catch (e) {
+                        if (!roles.length) {
+                          setBusy(true);
+                          try {
+                            const rec = await api.matchRoles(sessionId);
+                            setRoles(rec.roles);
+                            setRolesPersonalized(!!rec.personalized);
+                            setRolesGrounded(!!rec.grounded);
+                          } catch (e) {
                             fail(e);
                           } finally {
                             setBusy(false);
@@ -1437,7 +1449,7 @@ export default function App() {
                               navigator.clipboard?.writeText(accord.accordCode).then(() => {
                                 setCopied(true);
                                 setTimeout(() => setCopied(false), 1500);
-                              }).catch(() => {});
+                              }).catch(() => { });
                             }}
                             className="min-h-[46px] rounded-full border border-black/15 bg-white text-[13px]"
                           >

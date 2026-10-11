@@ -13,8 +13,9 @@ import { extractJson } from './aiService.js';
 
 function env() {
   return {
-    key: process.env.GEMINI_API_KEY || process.env.AI_API_KEY || '',
-    model: process.env.AI_MODEL || 'gemini-3.1-flash-lite',
+    key: process.env.GROQ_API_KEY || process.env.AI_API_KEY || process.env.GEMINI_API_KEY || '',
+    model: process.env.AI_MODEL || 'openai/gpt-oss-120b',
+    baseUrl: process.env.AI_BASE_URL || 'https://api.groq.com/openai/v1',
     grounding: String(process.env.AI_GROUNDING ?? 'true').toLowerCase() !== 'false'
       && !['0', 'no'].includes(String(process.env.AI_GROUNDING ?? '').toLowerCase())
   };
@@ -24,25 +25,63 @@ export function isGroundingOn() {
   return env().grounding;
 }
 
+async function callGroqCompatible(model, key, baseUrl, system, user, temperature, maxTokens, signal) {
+  const fullUrl = `${baseUrl.replace(/\/+$/, '')}/chat/completions`;
+  const res = await fetch(fullUrl, {
+    method: 'POST',
+    signal,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${key}`
+    },
+    body: JSON.stringify({
+      model: model || 'openai/gpt-oss-120b',
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user }
+      ],
+      temperature,
+      max_tokens: Math.min(maxTokens, 8192)
+    })
+  });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    console.warn(`Groq API ${res.status}:`, errText.slice(0, 300));
+    return null;
+  }
+  try {
+    const data = await res.json();
+    const text = data.choices?.[0]?.message?.content || '';
+    return { text, sources: [] };
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Raw generateContent call. Returns { text, sources } or null.
- * sources = [{ title, url }] distilled from groundingMetadata.
+ * Universal Research Generator — supports Groq (openai/gpt-oss-120b) and Gemini.
+ * Returns { text, sources } or null.
  */
 export async function geminiGenerate({ system, user, temperature = 0.5, maxTokens = 8192, useSearch = true, timeoutMs = 90000 }) {
-  const { key, model, grounding } = env();
+  const { key, model, baseUrl, grounding } = env();
   if (!key.trim()) return null;
-
-  const withTools = useSearch && grounding;
-  const body = {
-    system_instruction: { parts: [{ text: system }] },
-    contents: [{ role: 'user', parts: [{ text: user }] }],
-    generationConfig: { temperature, responseMimeType: 'application/json', maxOutputTokens: maxTokens }
-  };
-  if (withTools) body.tools = [{ google_search: {} }];
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
+    // If using Groq key or Groq endpoint
+    if (key.startsWith('gsk_') || baseUrl.includes('groq.com') || process.env.GROQ_API_KEY) {
+      return await callGroqCompatible(model, key, baseUrl, system, user, temperature, maxTokens, controller.signal);
+    }
+
+    const withTools = useSearch && grounding;
+    const body = {
+      system_instruction: { parts: [{ text: system }] },
+      contents: [{ role: 'user', parts: [{ text: user }] }],
+      generationConfig: { temperature, responseMimeType: 'application/json', maxOutputTokens: maxTokens }
+    };
+    if (withTools) body.tools = [{ google_search: {} }];
+
     // Pass 1: with search grounding (when enabled)
     let data = await callGemini(model, key, body, controller.signal);
     // Pass 2: model rejected the search tool → retry plain so the
@@ -68,7 +107,7 @@ export async function geminiGenerate({ system, user, temperature = 0.5, maxToken
     }
     return { text, sources: sources.slice(0, 8) };
   } catch (err) {
-    console.warn('Gemini native call failed:', err.message);
+    console.warn('AI generation call failed:', err.message);
     return null;
   } finally {
     clearTimeout(timer);

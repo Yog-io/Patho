@@ -22,6 +22,16 @@ dist/
 build/
 coverage/
 
+# Databases & Local Storage
+*.sqlite
+*.sqlite-journal
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.db-journal
+server/*.sqlite
+
 # Logs
 *.log
 npm-debug.log*
